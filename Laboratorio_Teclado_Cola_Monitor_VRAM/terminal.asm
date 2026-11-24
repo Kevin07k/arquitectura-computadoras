@@ -1,0 +1,99 @@
+; ISA didactica: registros enteros, RAM y VRAM de 8 bits.
+; HEAD=0x78, TAIL=0x79, COUNT=0x7A, CURSOR=0x60.
+; El ensamblador se conserva separado de la RAM de datos (ver README).
+INICIO:
+ MOV R0, 0
+ STORE R0, [0x78]
+ STORE R0, [0x79]
+ STORE R0, [0x7A]
+ STORE R0, [0x60]
+ MOV R3, 0xF0
+ MOV R2, 0x20
+LIMPIAR:
+ STORE R2, [R3]
+ ADD R3, 1
+ CMP R3, 0x100
+ JNZ LIMPIAR
+BUCLE:
+ CALL PRODUCTOR
+ CALL CONSUMIDOR
+ JMP BUCLE
+
+PRODUCTOR:
+ IN R1, [0x01]
+ AND R1, 1
+ CMP R1, 0
+ JZ FIN_PRODUCTOR
+ IN R2, [0x02] ; libera el latch incluso cuando la cola esta llena
+ LOAD R1, [0x7A]
+ CMP R1, 8
+ JZ FIN_PRODUCTOR
+ LOAD R3, [0x79]
+ MOV R4, R3
+ ADD R4, 0x70
+ STORE R2, [R4]
+ ADD R3, 1
+ AND R3, 7 ; modulo 8
+ STORE R3, [0x79]
+ ADD R1, 1
+ STORE R1, [0x7A]
+FIN_PRODUCTOR:
+ RET
+
+CONSUMIDOR:
+ LOAD R1, [0x7A]
+ CMP R1, 0
+ JZ FIN_CONSUMIDOR
+ LOAD R3, [0x78]
+ MOV R4, R3
+ ADD R4, 0x70
+ LOAD R2, [R4]
+ ADD R3, 1
+ AND R3, 7
+ STORE R3, [0x78]
+ SUB R1, 1
+ STORE R1, [0x7A]
+ LOAD R5, [0x60]
+ ADD R5, 0xF0
+ CMP R2, 0x08
+ JZ BORRAR
+ ; Se difiere scroll hasta recibir el siguiente caracter, permitiendo
+ ; borrar la ultima celda cuando el cursor vale 0x100.
+ CMP R5, 0x100
+ JNZ ESCRIBIR
+ CALL SCROLL
+ MOV R5, 0xFC
+ESCRIBIR:
+ STORE R2, [R5]
+ ADD R5, 1
+ SUB R5, 0xF0
+ STORE R5, [0x60]
+ RET
+BORRAR:
+ CMP R5, 0xF0
+ JZ FIN_CONSUMIDOR
+ SUB R5, 1
+ MOV R2, 0x20
+ STORE R2, [R5]
+ SUB R5, 0xF0
+ STORE R5, [0x60]
+FIN_CONSUMIDOR:
+ RET
+
+SCROLL:
+ MOV R3, 0xF0
+COPIAR:
+ MOV R4, R3
+ ADD R4, 4
+ LOAD R6, [R4]
+ STORE R6, [R3]
+ ADD R3, 1
+ CMP R3, 0xFC
+ JNZ COPIAR
+ MOV R6, 0x20
+LIMPIAR_FILA:
+ STORE R6, [R3]
+ ADD R3, 1
+ CMP R3, 0x100
+ JNZ LIMPIAR_FILA
+ RET
